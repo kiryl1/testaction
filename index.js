@@ -145,6 +145,9 @@ async function syncDependencies(repo) {
     console.log("Updating Dependency")
     updateDep(repo + "-" + g_tag + ".tar.gz", g_tag, repo, owner)
   }
+  else{
+    console.log("Dependency Already Up to Date")
+  }
 
 }
 
