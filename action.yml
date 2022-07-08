@@ -11,6 +11,10 @@ inputs:
     required: true
   path: 
     required: true
+  repo:
+    required: true
+   depPath:
+    required: true
 outputs:
   file:
     description: 'Output message'
