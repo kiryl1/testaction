@@ -13,7 +13,7 @@ inputs:
     required: true
   repo:
     required: true
-   depPath:
+  depPath:
     required: true
 outputs:
   file:
