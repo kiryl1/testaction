@@ -142,6 +142,7 @@ async function syncDependencies(repo) {
 
   if (compareVersions(g_tag, s3_latest_tag)) {
     //if version on Github is newer than one stored on s3, update depenendency 
+    console.log("Updating Dependency")
     updateDep(repo + "-" + g_tag + ".tar.gz", g_tag, repo, owner)
   }
 
