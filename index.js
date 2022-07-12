@@ -29,6 +29,7 @@ function writeToS3(response,FILE_NAME,path) {
   const data = client.send(new PutObjectCommand(putParams));
     //sending to s3 bucket 
     console.log("File Successfully Uploaded");
+    fileStream.close()
   })
 }
 
