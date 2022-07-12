@@ -14,7 +14,7 @@ var repo_list_string = core.getInput("repo")
 var repo_list = repo_list_string.split(",");
 
 
-function writeToS3(response,FILE_NAME,path) {
+async function writeToS3(response,FILE_NAME,path) {
   const writeStream = fs.createWriteStream(FILE_NAME);
   //writing tarball to file 
   response.pipe(writeStream).on("finish",function(){
@@ -26,7 +26,13 @@ function writeToS3(response,FILE_NAME,path) {
     Key: path,
     Body: fileStream
   };
-  const data = client.send(new PutObjectCommand(putParams));
+try {
+   const data = await client.send(new PutObjectCommand(putParams));
+    console.log("Success", data);
+    return data; // For unit tests.
+  } catch (err) {
+    console.log("Error", err);
+  }    
     //sending to s3 bucket 
     console.log("File Successfully Uploaded");
     fileStream.close()
