@@ -51,12 +51,12 @@ async function updateDep(FILE_NAME, tag_name, repo, owner) {
 
     if (response.statusCode > 300 && response.statusCode < 400 && response.headers.location) {
       if (url.parse(response.headers.location).hostname) {
-        https.get(response.headers.location,(response)=> {writeToFile(response,FILE_NAME,path)});
+        https.get(response.headers.location,(response)=> {writeToS3(response,FILE_NAME,path)});
       } else {
-        https.get(url.resolve(url.parse(TAR_URL).hostname, response.headers.location), (response)=> {writeToFile(response,FILE_NAME,path)});
+        https.get(url.resolve(url.parse(TAR_URL).hostname, response.headers.location), (response)=> {writeToS3(response,FILE_NAME,path)});
       }
     } else {
-      writeToFile(response,FILE_NAME,path);
+      writeToS3(response,FILE_NAME,path);
     }
   });
   
