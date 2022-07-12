@@ -17,7 +17,7 @@ var repo_list = repo_list_string.split(",");
 async function writeToS3(response,FILE_NAME,path) {
   const writeStream = fs.createWriteStream(FILE_NAME);
   //writing tarball to file 
-  response.pipe(writeStream).on("finish",function(){
+  response.pipe(writeStream).on("finish",async function(){
     writeStream.close()
     var fileStream = fs.createReadStream(FILE_NAME);
   // getting downloaded tarfile to send to s3 bucket 
