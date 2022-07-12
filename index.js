@@ -14,6 +14,25 @@ var repo_list_string = core.getInput("repo")
 var repo_list = repo_list_string.split(",");
 
 
+function writeToS3(response,FILE_NAME,path) {
+  const writeStream = fs.createWriteStream(FILE_NAME);
+  //writing tarball to file 
+  response.pipe(writeStream).on("finish",function(){
+    writeStream.close()
+    var fileStream = fs.createReadStream(FILE_NAME);
+  // getting downloaded tarfile to send to s3 bucket 
+  var putParams = {
+    Bucket: bucketName,
+    Key: path,
+    Body: fileStream
+  };
+  const data = client.send(new PutObjectCommand(putParams));
+    //sending to s3 bucket 
+    console.log("File Successfully Uploaded");
+  })
+}
+
+
 async function updateDep(FILE_NAME, tag_name, repo, owner) {
   console.log(FILE_NAME)
   var TAR_URL = 'https://api.github.com/repos/' + owner + '/' + repo + '/tarball/' + tag_name;
@@ -27,28 +46,21 @@ async function updateDep(FILE_NAME, tag_name, repo, owner) {
     method: 'GET',
     headers: { 'user-agent': 'node.js' }
   };
+  console.log(TAR_URL)
+  await https.get(options, (response) => {
 
-  https.get(options, (res) => {
-
-    const writeStream = fs.createWriteStream(FILE_NAME);
-  
-    res.pipe(writeStream);
-    // writing downloaded tar file to write stream 
-    writeStream.on("finish", function () {
-      writeStream.close();
-      console.log("The download is Completed");
-      var fileStream = fs.createReadStream(FILE_NAME);
-      // getting downloaded tarfile to send to s3 bucket 
-      var putParams = {
-        Bucket: bucketName,
-        Key: path,
-        Body: fileStream
-      };
-      const data = client.send(new PutObjectCommand(putParams));
-      //upload to s3 bucket 
-
-    });
+    if (response.statusCode > 300 && response.statusCode < 400 && response.headers.location) {
+      if (url.parse(response.headers.location).hostname) {
+        https.get(response.headers.location,(response)=> {writeToFile(response,FILE_NAME,path)});
+      } else {
+        https.get(url.resolve(url.parse(TAR_URL).hostname, response.headers.location), (response)=> {writeToFile(response,FILE_NAME,path)});
+      }
+    } else {
+      writeToFile(response,FILE_NAME,path);
+    }
   });
+  
+
 
 }
 async function list(path) {
