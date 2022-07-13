@@ -147,7 +147,7 @@ async function syncDependencies(repo) {
 
   if (!s3_dep_list) {
     //if there are no versions stored on the s3 bucket of this repo 
-    updateDep(repo + "-" + g_tag + ".tar.gz", g_tag, repo, owner)
+    updateDep(repo + "-" + g_tag + ".tar.gz", gh_latest_release, repo, owner)
     return
   }
 
@@ -162,7 +162,7 @@ async function syncDependencies(repo) {
   if (compareVersions(g_tag, s3_latest_tag)) {
     //if version on Github is newer than one stored on s3, update depenendency 
     console.log("Updating Dependency")
-    updateDep(repo + "-" + g_tag + ".tar.gz", g_tag, repo, owner)
+    updateDep(repo + "-" + g_tag + ".tar.gz", gh_latest_release, repo, owner)
   }
   else{
     console.log("Dependency Already Up to Date")
