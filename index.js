@@ -19,12 +19,12 @@ async function writeToS3(response,FILE_NAME,path) {
   //writing tarball to file 
   response.pipe(writeStream).on("finish",async function(){
     writeStream.close()
-     var fileStream = fs.createReadStream(FILE_NAME,null);
+     var fileData = fs.readFileSync(FILE_NAME);
   // getting downloaded tarfile to send to s3 bucket 
   var putParams = {
     Bucket: bucketName,
     Key: path,
-    Body: fileStream
+    Body: fileData
   };
 try {
    const data = await client.send(new PutObjectCommand(putParams));
@@ -35,7 +35,7 @@ try {
   }    
     //sending to s3 bucket 
     console.log("File Successfully Uploaded");
-    fileStream.close()
+  
   })
 }
 
