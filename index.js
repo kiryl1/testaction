@@ -28,20 +28,19 @@ async function writeToS3(response,FILE_NAME,path) {
   };
 try {
    const data = await client.send(new PutObjectCommand(putParams));
-    console.log("Success", data);
-    return data; // For unit tests.
+    console.log("File Successfully Uploaded");
+    return data; 
   } catch (err) {
     console.log("Error", err);
   }    
     //sending to s3 bucket 
-    console.log("File Successfully Uploaded");
+    
   
   })
 }
 
 
 async function updateDep(FILE_NAME, tag_name, repo, owner) {
-  console.log(FILE_NAME)
   var TAR_URL = 'https://api.github.com/repos/' + owner + '/' + repo + '/tarball/' + tag_name;
   // download location of the tarfile of a repo for a specific release 
   var path = "Dependencies/" + repo + "/" + FILE_NAME
@@ -155,8 +154,8 @@ async function syncDependencies(repo) {
   //s3_latest is sorted descending alphabetically so the first element will give the latest version in s3 bucket 
   var s3_latest_tag = s3_latest.Key.substring(s3_latest.Key.indexOf('-') + 1, s3_latest.Key.indexOf(".tar"))
   //geting version number of latest tar file stored in s3 bucket 
-  console.log(s3_latest_tag)
-  console.log(g_tag)
+  console.log("Latest Version on S3: " + s3_latest_tag)
+  console.log("Latest Version on Github: " +  g_tag)
 
 
   if (compareVersions(g_tag, s3_latest_tag)) {
