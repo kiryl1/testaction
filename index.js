@@ -14,29 +14,34 @@ var repo_list_string = core.getInput("repo")
 var repo_list = repo_list_string.split(",");
 
 
-async function writeToS3(response,FILE_NAME,path) {
+async function writeToS3(response, FILE_NAME, path) {
+  try{
   const writeStream = fs.createWriteStream(FILE_NAME);
   //writing tarball to file 
-  response.pipe(writeStream).on("finish",async function(){
+  response.pipe(writeStream).on("finish", async function () {
     writeStream.close()
-     var fileData = fs.readFileSync(FILE_NAME);
-  // getting downloaded tarfile to send to s3 bucket 
-  var putParams = {
-    Bucket: bucketName,
-    Key: path,
-    Body: fileData
-  };
-try {
-   const data = await client.send(new PutObjectCommand(putParams));
-    console.log("File Successfully Uploaded");
-    return data; 
-  } catch (err) {
-    console.log("Error", err);
-  }    
+    var fileData = fs.readFileSync(FILE_NAME);
+    // getting downloaded tarfile to send to s3 bucket 
+    var putParams = {
+      Bucket: bucketName,
+      Key: path,
+      Body: fileData
+    };
+    try {
+      const data = await client.send(new PutObjectCommand(putParams));
+      console.log("File Successfully Uploaded");
+      return data;
+    } catch (err) {
+      console.log("Error", err);
+    }
     //sending to s3 bucket 
-    
-  
+
+
   })
+}
+catch(err){
+  console.log(err)
+}
 }
 
 
@@ -53,20 +58,24 @@ async function updateDep(FILE_NAME, tag_name, repo, owner) {
     headers: { 'user-agent': 'node.js' }
   };
   console.log(TAR_URL)
+  try{
   await https.get(options, (response) => {
 
     if (response.statusCode > 300 && response.statusCode < 400 && response.headers.location) {
       if (url.parse(response.headers.location).hostname) {
-        https.get(response.headers.location,(response)=> {writeToS3(response,FILE_NAME,path)});
+        https.get(response.headers.location, (response) => { writeToS3(response, FILE_NAME, path) });
       } else {
-        https.get(url.resolve(url.parse(TAR_URL).hostname, response.headers.location), (response)=> {writeToS3(response,FILE_NAME,path)});
+        https.get(url.resolve(url.parse(TAR_URL).hostname, response.headers.location), (response) => { writeToS3(response, FILE_NAME, path) });
       }
     } else {
-      writeToS3(response,FILE_NAME,path);
+      writeToS3(response, FILE_NAME, path);
     }
   });
+}
+catch(err){
+  console.log(err)
   
-
+}
 
 }
 async function list(path) {
@@ -74,25 +83,34 @@ async function list(path) {
     Bucket: bucketName,
     Prefix: path + "/",
   };
-
-  const data = await client.send(new ListObjectsCommand(params));
-  if (data.length < 0) {
-    return data
+  try {
+    const data = await client.send(new ListObjectsCommand(params));
+    if (data.length < 0) {
+      return data
+    }
+    //gets all objects in the bucket folder specified by path 
+    var files = data.Contents?.filter((file) => { return file.Key.indexOf('.gz') > 0 }).sort((file1, file2) => -1 * file1.Key.localeCompare(file2.Key))
+    //gets all the file names that end with the file extension .gz and sorts them desc alphabetically
+    return files
   }
-  //gets all objects in the bucket folder specified by path 
-  var files = data.Contents?.filter((file) => { return file.Key.indexOf('.gz') > 0 }).sort((file1, file2) => -1 * file1.Key.localeCompare(file2.Key))
-  //gets all the file names that end with the file extension .gz and sorts them desc alphabetically
-  return files
+  catch (err) {
+    console.log(err)
+    return []
+  }
 }
 async function getLatest(repo, owner) {
+  try{
   var latest = await octokit.request('GET /repos/{owner}/{repo}/releases/latest', {
     owner: owner,
     repo: repo
-  }
-
-
-  )
+  })
   return latest
+}
+catch(err){
+  console.log(err)
+  return null
+}
+  
 }
 
 function compareVersions(v1, v2) {
@@ -115,24 +133,43 @@ function compareVersions(v1, v2) {
 }
 
 function getConfig(repo) {
-  var depPath = core.getInput("depPath")
-  var fs = require('fs');
-  var config = JSON.parse(fs.readFileSync(depPath, 'utf8'));
-  // opening dependency json file 
-  return config[repo];
-
+  try {
+    var depPath = core.getInput("depPath")
+    var config = JSON.parse(fs.readFileSync(depPath, 'utf8'));
+    // opening dependency json file 
+    return config[repo];
+  }
+  catch (err) {
+    console.log(err)
+    return {}
+  }
 }
 function parseConfig(cfg) {
-  var path = cfg["path"]
-  var url = cfg["github_url"]
-  var org = url.split("/")[0]
-  return [path, org]
+  try {
+    var path = cfg["path"]
+    var url = cfg["github_url"]
+    var org = url.split("/")[0]
+    return [path, org]
+  }
+  catch (err) {
+    console.log(err)
+    return []
+  }
 }
 
 async function syncDependencies(repo) {
   var cfg = getConfig(repo)
+  if (JSON.stringify(cfg) === "{}") {
+    console.log("Dependency Config is Empty")
+    return
+  }
   //read info about repo to update from config file 
   var path_and_org = parseConfig(cfg)
+  if (path_and_org.length == 0) {
+    console.log("Could not parse config file")
+    return
+
+  }
   var owner = path_and_org[1]
   var path = path_and_org[0]
 
@@ -140,6 +177,10 @@ async function syncDependencies(repo) {
   //get latest versions of tar file on s3 bucket 
   var gh_latest_release = await getLatest(repo, owner)
   //gets latest version of the repo on Github 
+  if(gh_latest_release == null){
+    console.log("Could not fetch latest release on Github")
+    return 
+  }
 
   var g_tag = gh_latest_release.data.tag_name.replace("v", "")
   //remove the v and leave just the version number 
@@ -155,7 +196,7 @@ async function syncDependencies(repo) {
   var s3_latest_tag = s3_latest.Key.substring(s3_latest.Key.indexOf('-') + 1, s3_latest.Key.indexOf(".tar"))
   //geting version number of latest tar file stored in s3 bucket 
   console.log("Latest Version on S3: " + s3_latest_tag)
-  console.log("Latest Version on Github: " +  g_tag)
+  console.log("Latest Version on Github: " + g_tag)
 
 
   if (compareVersions(g_tag, s3_latest_tag)) {
@@ -163,7 +204,7 @@ async function syncDependencies(repo) {
     console.log("Updating Dependency")
     updateDep(repo + "-" + g_tag + ".tar.gz", gh_latest_release.data.tag_name, repo, owner)
   }
-  else{
+  else {
     console.log("Dependency Already Up to Date")
   }
 
