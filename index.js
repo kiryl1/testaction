@@ -78,7 +78,7 @@ catch(err){
 }
 
 }
-async function list(path) {
+async function ListDepS3(path) {
   var params = {
     Bucket: bucketName,
     Prefix: path + "/",
@@ -89,8 +89,8 @@ async function list(path) {
       return data
     }
     //gets all objects in the bucket folder specified by path 
-    var files = data.Contents?.filter((file) => { return file.Key.indexOf('.gz') > 0 }).sort((file1, file2) => -1 * file1.Key.localeCompare(file2.Key))
-    //gets all the file names that end with the file extension .gz and sorts them desc alphabetically
+    var files = data.Contents?.filter((file) => { return file.Key.indexOf('.gz') > 0 }).sort((file1,file2)=>(-1*(file1.LastModified-file2.LastModified)))
+    //gets files that have .gz in file name sorted by last modified date desc 
     return files
   }
   catch (err) {
@@ -173,7 +173,7 @@ async function syncDependencies(repo) {
   var owner = path_and_org[1]
   var path = path_and_org[0]
 
-  var s3_dep_list = await list(path)
+  var s3_dep_list = await ListDepS3(path)
   //get latest versions of tar file on s3 bucket 
   var gh_latest_release = await getLatest(repo, owner)
   //gets latest version of the repo on Github 
