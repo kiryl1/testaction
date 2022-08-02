@@ -1,5 +1,5 @@
-name: 'Hello World'
-description: 'Greet someone and record the time'
+name: 'Update Dependencies'
+description: 'Updates tarfile of selected dependencies'
 inputs:
   token:
     required: true
@@ -15,9 +15,6 @@ inputs:
     required: true
   depPath:
     required: true
-outputs:
-  file:
-    description: 'Output message'
 runs:
   using: 'node16'
   main: 'index.js'
