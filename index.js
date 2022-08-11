@@ -18,35 +18,37 @@ var repo_list = repo_list_string.split(",");
 
 async function writeToS3(response, FILE_NAME, path) {
   try {
-    const writeStream = fs.createWriteStream(FILE_NAME);
     // writing tarball to file
+    const writeStream = fs.createWriteStream(FILE_NAME);
 
     response.pipe(writeStream).on("finish", async function () {
       writeStream.close();
-      var fileData = fs.readFileSync(FILE_NAME);
       // getting downloaded tarfile to send to s3 bucket
-      
+      var fileData = fs.readFileSync(FILE_NAME);
+
       var putParams = {
         Bucket: bucketName,
         Key: path,
         Body: fileData,
       };
       try {
+        // sending to s3 bucket
         const data = await client.send(new PutObjectCommand(putParams));
         console.log("File Successfully Uploaded");
         return data;
       } catch (err) {
         console.log("Error", err);
+        throw err
       }
-      // sending to s3 bucket
-
     });
   } catch (err) {
     console.log(err);
+    throw err
   }
 }
 
 async function updateDependencies(FILE_NAME, tag_name, repo, owner) {
+  // download location of the tarfile of a repo for a specific release
   var TAR_URL =
     "https://api.github.com/repos/" +
     owner +
@@ -54,10 +56,9 @@ async function updateDependencies(FILE_NAME, tag_name, repo, owner) {
     repo +
     "/tarball/" +
     tag_name;
-  // download location of the tarfile of a repo for a specific release
 
-  var path = "Dependencies/" + repo + "/" + FILE_NAME;
   // path where to store tar file on s3 bucket
+  var path = "Dependencies/" + repo + "/" + FILE_NAME;
 
   var options = {
     host: "api.github.com",
@@ -91,31 +92,34 @@ async function updateDependencies(FILE_NAME, tag_name, repo, owner) {
     });
   } catch (err) {
     console.log(err);
+    throw err
   }
 }
-async function ListDependenciesS3(path) {
+
+async function listDependenciesS3(path) {
   var params = {
     Bucket: bucketName,
     Prefix: path + "/",
   };
   try {
+    // gets all objects in the bucket folder specified by path
     const data = await client.send(new ListObjectsCommand(params));
     if (data.length < 0) {
       return data;
     }
-    // gets all objects in the bucket folder specified by path
 
-    var files = data.Contents?.filter((file) => {
-      return file.Key.indexOf(".gz") > 0;
-    }).sort((file1, file2) => -1 * (file1.LastModified - file2.LastModified));
     // gets files that have .gz in file name sorted by last modified date desc
+    var files = data.Contents?.filter((file) => {
+       file.Key.includes(".gz")
+    }).sort((file1, file2) => (file2.LastModified - file1.LastModified ));
 
     return files;
   } catch (err) {
     console.log(err);
-    return [];
+    throw err
   }
 }
+
 async function getLatest(repo, owner) {
   try {
     var latest = await octokit.request(
@@ -128,7 +132,7 @@ async function getLatest(repo, owner) {
     return latest;
   } catch (err) {
     console.log(err);
-    return null;
+    throw err
   }
 }
 
@@ -153,15 +157,17 @@ function compareVersions(v1, v2) {
 function getConfig(repo) {
   try {
     var depPath = core.getInput("depPath");
-    var config = JSON.parse(fs.readFileSync(depPath, "utf8"));
+
     // opening dependency json file
+    var config = JSON.parse(fs.readFileSync(depPath, "utf8"));
 
     return config[repo];
   } catch (err) {
     console.log(err);
-    return {};
+    throw err
   }
 }
+
 function parseConfig(cfg) {
   try {
     var path = cfg["path"];
@@ -170,17 +176,18 @@ function parseConfig(cfg) {
     return [path, org];
   } catch (err) {
     console.log(err);
-    return [];
+    throw err
   }
 }
 
 async function syncDependencies(repo) {
+  try{
+  // read info about repo to update from config file
   var cfg = getConfig(repo);
   if (JSON.stringify(cfg) === "{}") {
     console.log("Dependency Config is Empty");
     return;
   }
-  // read info about repo to update from config file
 
   var path_and_org = parseConfig(cfg);
   if (path_and_org.length == 0) {
@@ -190,23 +197,22 @@ async function syncDependencies(repo) {
   var owner = path_and_org[1];
   var path = path_and_org[0];
 
-  var s3_dep_list = await ListDependenciesS3(path);
   // get latest versions of tar file on s3 bucket
+  var s3_dep_list = await listDependenciesS3(path);
 
-  var gh_latest_release = await getLatest(repo, owner);
   // gets latest version of the repo on Github
+  var gh_latest_release = await getLatest(repo, owner);
 
   if (gh_latest_release == null) {
     console.log("Could not fetch latest release on Github");
     return;
   }
 
-  var g_tag = gh_latest_release.data.tag_name.replace("v", "");
   // remove the v and leave just the version number
+  var g_tag = gh_latest_release.data.tag_name.replace("v", "");
 
+  // if there are no versions stored on the s3 bucket of this repo
   if (!s3_dep_list) {
-    // if there are no versions stored on the s3 bucket of this repo
-
     updateDependencies(
       repo + "-" + g_tag + ".tar.gz",
       gh_latest_release.data.tag_name,
@@ -216,21 +222,20 @@ async function syncDependencies(repo) {
     return;
   }
 
-  var s3_latest = s3_dep_list[0];
   // s3_latest is sorted descending alphabetically so the first element will give the latest version in s3 bucket
+  var s3_latest = s3_dep_list[0];
 
+  // geting version number of latest tar file stored in s3 bucket
   var s3_latest_tag = s3_latest.Key.substring(
     s3_latest.Key.indexOf("-") + 1,
     s3_latest.Key.indexOf(".tar")
   );
-  // geting version number of latest tar file stored in s3 bucket
 
   console.log("Latest Version on S3: " + s3_latest_tag);
   console.log("Latest Version on Github: " + g_tag);
 
+  // if version on Github is newer than one stored on s3, update depenendency
   if (compareVersions(g_tag, s3_latest_tag)) {
-    // if version on Github is newer than one stored on s3, update depenendency
-    
     console.log("Updating Dependency");
     updateDependencies(
       repo + "-" + g_tag + ".tar.gz",
@@ -241,6 +246,10 @@ async function syncDependencies(repo) {
   } else {
     console.log("Dependency Already Up to Date");
   }
+}
+catch{
+  console.log("Encountered error, stopping action")
+}
 }
 
 repo_list.forEach((element) => {
