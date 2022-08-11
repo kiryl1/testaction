@@ -106,7 +106,7 @@ async function listDependenciesS3(path) {
 
     // gets files that have .gz in file name sorted by last modified date desc
     var files = data.Contents?.filter((file) => {
-      file.Key.includes(".gz");
+       return file.Key.includes(".gz");
     }).sort((file1, file2) => file2.LastModified - file1.LastModified);
 
     return files;
