@@ -244,6 +244,7 @@ async function syncDependencies(repo) {
     }
   } catch (err) {
     console.log("Encountered error, stopping action");
+    console.log(err)
   }
 }
 
