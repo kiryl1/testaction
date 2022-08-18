@@ -1,3 +1,4 @@
+const listDependenciesS3  = require( "../Utils/utils");
 const core = require("@actions/core");
 const github = require("@actions/github");
 const fs = require("fs");
@@ -32,9 +33,9 @@ async function writeToS3(response, FILE_NAME, path) {
         Body: fileData,
       };
         // sending to s3 bucket
-        const data = await client.send(new PutObjectCommand(putParams));
-        console.log("File Successfully Uploaded");
-        return data;
+      const data = await client.send(new PutObjectCommand(putParams));
+      console.log("File Successfully Uploaded");
+      return data;
     
     });
   } catch (err) {
@@ -45,13 +46,8 @@ async function writeToS3(response, FILE_NAME, path) {
 
 async function updateDependencies(FILE_NAME, tag_name, repo, owner) {
   // download location of the tarfile of a repo for a specific release
-  const TAR_URL =
-    "https://api.github.com/repos/" +
-    owner +
-    "/" +
-    repo +
-    "/tarball/" +
-    tag_name;
+  const TAR_URL =`https://api.github.com/repos/${owner}/${repo}/tarball/${tag_name}`
+
 
   // path where to store tar file on s3 bucket
   const path = "Dependencies/" + repo + "/" + FILE_NAME;
@@ -86,30 +82,6 @@ async function updateDependencies(FILE_NAME, tag_name, repo, owner) {
         writeToS3(response, FILE_NAME, path);
       }
     });
-  } catch (err) {
-    console.log(err);
-    throw err;
-  }
-}
-
-async function listDependenciesS3(path) {
-  const params = {
-    Bucket: bucketName,
-    Prefix: path + "/",
-  };
-  try {
-    // gets all objects in the bucket folder specified by path
-    const data = await client.send(new ListObjectsCommand(params));
-    if (data.length < 0) {
-      return data;
-    }
-
-    // gets files that have .gz in file name sorted by last modified date desc
-    const files = data.Contents?.filter((file) => {
-       return file.Key.includes(".gz");
-    }).sort((file1, file2) => file2.LastModified - file1.LastModified);
-
-    return files;
   } catch (err) {
     console.log(err);
     throw err;
@@ -244,7 +216,6 @@ async function syncDependencies(repo) {
     }
   } catch (err) {
     console.log("Encountered error, stopping action");
-    console.log(err)
   }
 }
 
