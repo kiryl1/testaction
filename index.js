@@ -13,18 +13,18 @@ const { Octokit, App } = require("octokit");
 const bucketName = core.getInput("bucketName");
 const client = new S3Client();
 const octokit = new Octokit({ auth: core.getInput("token") });
-const repo_list_string = core.getInput("repo");
-const repo_list = repo_list_string.split(",");
+const repoListString = core.getInput("repo");
+const repoList = repoListString.split(",");
 
-async function writeToS3(response, FILE_NAME, path) {
+async function writeToS3(response, fileName, path) {
   try {
     // writing tarball to file
-    const writeStream = fs.createWriteStream(FILE_NAME);
+    const writeStream = fs.createWriteStream(fileName);
 
     response.pipe(writeStream).on("finish", async function () {
       writeStream.close();
       // getting downloaded tarfile to send to s3 bucket
-      const fileData = fs.readFileSync(FILE_NAME);
+      const fileData = fs.readFileSync(fileName);
 
       const putParams = {
         Bucket: bucketName,
@@ -64,12 +64,12 @@ async function listDependenciesS3(path) {
     throw err;
   }
 }
-async function updateDependencies(FILE_NAME, tag_name, repo, owner) {
+async function updateDependencies(fileName, tag_name, repo, owner) {
   // download location of the tarfile of a repo for a specific release
   const TAR_URL = `https://api.github.com/repos/${owner}/${repo}/tarball/${tag_name}`;
 
   // path where to store tar file on s3 bucket
-  const path = "Dependencies/" + repo + "/" + FILE_NAME;
+  const path = "Dependencies/" + repo + "/" + fileName;
 
   const options = {
     host: "api.github.com",
@@ -87,18 +87,18 @@ async function updateDependencies(FILE_NAME, tag_name, repo, owner) {
       ) {
         if (url.parse(response.headers.location).hostname) {
           https.get(response.headers.location, (response) => {
-            writeToS3(response, FILE_NAME, path);
+            writeToS3(response, fileName, path);
           });
         } else {
           https.get(
             url.resolve(url.parse(TAR_URL).hostname, response.headers.location),
             (response) => {
-              writeToS3(response, FILE_NAME, path);
+              writeToS3(response, fileName, path);
             }
           );
         }
       } else {
-        writeToS3(response, FILE_NAME, path);
+        writeToS3(response, fileName, path);
       }
     });
   } catch (err) {
@@ -124,14 +124,14 @@ async function getLatest(repo, owner) {
 }
 
 function compareVersions(v1, v2) {
-  let v1_split = v1.split(".");
-  let v2_split = v2.split(".");
-  if (v1_split.length == v2_split.length) {
-    for (let i = 0; i < v1_split.length; i++) {
-      if (v1_split[i] > v2_split[i]) {
+  let v1Split = v1.split(".");
+  let v2Split = v2.split(".");
+  if (v1Split.length == v2Split.length) {
+    for (let i = 0; i < v1Split.length; i++) {
+      if (v1Split[i] > v2Split[i]) {
         return 1;
       }
-      if (v1_split[i] < v2_split[i]) {
+      if (v1Split[i] < v2Split[i]) {
         return -1;
       }
     }
@@ -176,57 +176,57 @@ async function syncDependencies(repo) {
       return;
     }
 
-    const path_and_org = parseConfig(cfg);
-    if (path_and_org.length == 0) {
+    const pathAndOrg = parseConfig(cfg);
+    if (pathAndOrg.length == 0) {
       console.log("Could not parse config file");
       return;
     }
-    const owner = path_and_org[1];
-    const path = path_and_org[0];
+    const owner = pathAndOrg[1];
+    const path = pathAndOrg[0];
 
     // get latest versions of tar file on s3 bucket
-    const s3_dep_list = await listDependenciesS3(path);
+    const s3DeplList = await listDependenciesS3(path);
 
     // gets latest version of the repo on Github
-    const gh_latest_release = await getLatest(repo, owner);
+    const ghLatestRelease = await getLatest(repo, owner);
 
-    if (gh_latest_release == null) {
+    if (ghLatestRelease == null) {
       console.log("Could not fetch latest release on Github");
       return;
     }
 
     // remove the v and leave just the version number
-    const g_tag = gh_latest_release.data.tag_name.replace("v", "");
+    const gTag = ghLatestRelease.data.tag_name.replace("v", "");
 
     // if there are no versions stored on the s3 bucket of this repo
-    if (!s3_dep_list) {
+    if (!s3DeplList) {
       updateDependencies(
-        repo + "-" + g_tag + ".tar.gz",
-        gh_latest_release.data.tag_name,
+        repo + "-" + gTag + ".tar.gz",
+        ghLatestRelease.data.tag_name,
         repo,
         owner
       );
       return;
     }
 
-    // s3_latest is sorted descending alphabetically so the first element will give the latest version in s3 bucket
-    const s3_latest = s3_dep_list[0];
+    // s3Latest is sorted descending alphabetically so the first element will give the latest version in s3 bucket
+    const s3Latest = s3DeplList[0];
 
     // geting version number of latest tar file stored in s3 bucket
-    const s3_latest_tag = s3_latest.Key.substring(
-      s3_latest.Key.indexOf("-") + 1,
-      s3_latest.Key.indexOf(".tar")
+    const s3LatestTag = s3Latest.Key.substring(
+      s3Latest.Key.indexOf("-") + 1,
+      s3Latest.Key.indexOf(".tar")
     );
 
-    console.log("Latest Version on S3: " + s3_latest_tag);
-    console.log("Latest Version on Github: " + g_tag);
+    console.log("Latest Version on S3: " + s3LatestTag);
+    console.log("Latest Version on Github: " + gTag);
 
     // if version on Github is newer than one stored on s3, update depenendency
-    if (compareVersions(g_tag, s3_latest_tag)) {
+    if (compareVersions(gTag, s3LatestTag)) {
       console.log("Updating Dependency");
       updateDependencies(
-        repo + "-" + g_tag + ".tar.gz",
-        gh_latest_release.data.tag_name,
+        repo + "-" + gTag + ".tar.gz",
+        ghLatestRelease.data.tag_name,
         repo,
         owner
       );
@@ -238,6 +238,6 @@ async function syncDependencies(repo) {
   }
 }
 
-repo_list.forEach((element) => {
+repoList.forEach((element) => {
   syncDependencies(element);
 });
